@@ -1,28 +1,28 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Rocket,
-  Download,
-  Terminal,
-  ExternalLink,
-  Film,
-  FileText,
-  Share2,
   Sparkles,
   Github,
   Globe,
   Mic,
   Clock,
-  CheckCircle,
+  Film,
+  FileText,
+  Share2,
   AlertCircle,
-  Copy,
-  ChevronDown,
-  ChevronUp,
+  X,
+  Sliders,
+  CheckCircle2,
+  Terminal,
 } from "lucide-react";
-import { checkBackendHealth, startPipelineJob, getFullVideoUrl } from "@/lib/api";
+import { checkBackendHealth, startPipelineJob } from "@/lib/api";
 import { JobStatus } from "@/lib/types";
 import { PipelineStepper } from "@/components/PipelineStepper";
+import { LogTerminal } from "@/components/LogTerminal";
+import { PipelineError } from "@/components/PipelineError";
+import { VideoTheater } from "@/components/VideoTheater";
 import { MarkdownViewer } from "@/components/MarkdownViewer";
 
 const PRESETS = [
@@ -52,8 +52,13 @@ export default function HomePage() {
 
   const [job, setJob] = useState<JobStatus | null>(null);
   const [activeTab, setActiveTab] = useState<"video" | "readme" | "devpost" | "social">("video");
-  const [showLogs, setShowLogs] = useState(true);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [initError, setInitError] = useState<string | null>(null);
 
+  const formRef = useRef<HTMLFormElement>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  // Check health periodically
   useEffect(() => {
     checkBackendHealth().then(setBackendOnline);
     const interval = setInterval(() => {
@@ -62,8 +67,29 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleStart = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Timer for elapsed pipeline runtime
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (job?.status === "running") {
+      timer = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [job?.status]);
+
+  const handleStart = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setInitError(null);
+    setElapsedSeconds(0);
+
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
     try {
       const initialJob = await startPipelineJob({
         repo_url: repoUrl,
@@ -76,6 +102,7 @@ export default function HomePage() {
       // Connect to SSE stream
       const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const eventSource = new EventSource(`${API_BASE}/api/pipeline/stream/${initialJob.job_id}`);
+      eventSourceRef.current = eventSource;
 
       eventSource.onmessage = (event) => {
         try {
@@ -83,18 +110,25 @@ export default function HomePage() {
           setJob(updated);
           if (updated.status === "completed" || updated.status === "failed") {
             eventSource.close();
+            eventSourceRef.current = null;
           }
         } catch (err) {
-          console.error("SSE Parse error:", err);
+          console.error("SSE parse error:", err);
         }
       };
 
-      eventSource.onerror = () => {
+      eventSource.onerror = (err) => {
+        console.warn("SSE connection closed or interrupted:", err);
         eventSource.close();
+        eventSourceRef.current = null;
       };
     } catch (err: any) {
-      alert(`Error starting pipeline: ${err.message}`);
+      setInitError(err.message || "Failed to start autonomous pipeline. Ensure FastAPI backend is running on :8000.");
     }
+  };
+
+  const handleEditInputs = () => {
+    formRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
@@ -182,8 +216,25 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* Global Dispatch Error Toast Banner */}
+        {initError && (
+          <div className="mb-6 p-4 rounded-xl bg-rose-950/50 border border-rose-500/40 text-rose-200 text-xs flex items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center space-x-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>{initError}</span>
+            </div>
+            <button
+              onClick={() => setInitError(null)}
+              className="text-rose-400 hover:text-rose-200 p-1 rounded-md"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Interactive Input Dock */}
         <form
+          ref={formRef}
           onSubmit={handleStart}
           className="glass-panel-glow rounded-2xl p-6 sm:p-8 mb-10 shadow-2xl relative overflow-hidden"
         >
@@ -279,59 +330,40 @@ export default function HomePage() {
           </div>
         </form>
 
-        {/* Live Stepper & Terminal Logs */}
+        {/* Live Stepper, Error Banner, & Telemetry */}
         {job && (
-          <section className="space-y-4 mb-10">
+          <section className="space-y-6 mb-10">
+            {/* Pipeline Stepper */}
             <PipelineStepper
               currentStage={job.stage}
               progress={job.progress}
               status={job.status}
+              elapsedSeconds={elapsedSeconds}
             />
 
-            {/* Terminal Drawer */}
-            <div className="glass-panel rounded-2xl overflow-hidden border border-zinc-800/80">
-              <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-950/80 border-b border-zinc-800/80 text-xs">
-                <div className="flex items-center space-x-2 font-mono text-zinc-400">
-                  <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Agent Execution Log</span>
-                  <span className="text-zinc-600">|</span>
-                  <span className="text-zinc-500">ID: {job.job_id}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowLogs(!showLogs)}
-                  className="flex items-center space-x-1 text-zinc-400 hover:text-zinc-200 font-mono text-[11px] transition"
-                >
-                  <span>{showLogs ? "Collapse" : "Expand"}</span>
-                  {showLogs ? (
-                    <ChevronUp className="w-3.5 h-3.5" />
-                  ) : (
-                    <ChevronDown className="w-3.5 h-3.5" />
-                  )}
-                </button>
-              </div>
+            {/* Error State Card (if failed) */}
+            {job.status === "failed" && (
+              <PipelineError
+                error={job.error}
+                stage={job.stage}
+                jobId={job.job_id}
+                logs={job.logs}
+                onRetry={() => handleStart()}
+                onEditSettings={handleEditInputs}
+              />
+            )}
 
-              {showLogs && (
-                <div className="p-4 bg-zinc-950/60 font-mono text-xs text-zinc-400 max-h-52 overflow-y-auto space-y-1.5 selection:bg-zinc-800">
-                  {job.logs.map((log, i) => (
-                    <div key={i} className="flex items-start space-x-2">
-                      <span className="text-emerald-500 select-none">›</span>
-                      <span className="text-zinc-300">{log}</span>
-                    </div>
-                  ))}
-                  {job.status === "running" && (
-                    <div className="flex items-center space-x-2 text-emerald-400 animate-pulse pt-1">
-                      <span className="select-none">›</span>
-                      <span>Agent working...</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            {/* Unified Telemetry Terminal */}
+            <LogTerminal
+              logs={job.logs}
+              jobId={job.job_id}
+              status={job.status}
+              stage={job.stage}
+            />
           </section>
         )}
 
-        {/* Deliverables Workspace Showcase */}
+        {/* Deliverables Workspace Showcase (on completion) */}
         {job?.status === "completed" && (
           <section className="space-y-6 pt-4">
             {/* Tab Navigation Dock */}
@@ -385,110 +417,13 @@ export default function HomePage() {
               </button>
             </div>
 
-            {/* TAB 1: 21st.dev Video Theater */}
+            {/* TAB 1: Interactive Video Theater */}
             {activeTab === "video" && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 glass-panel rounded-2xl overflow-hidden p-5 shadow-2xl border border-zinc-800">
-                  {/* Theater Window Bar */}
-                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-800/80 text-xs">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 inline-block" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block" />
-                      <span className="text-zinc-400 font-mono text-[11px] ml-2">
-                        1080p Headless MP4
-                      </span>
-                    </div>
-
-                    {job.video_url && (
-                      <a
-                        href={getFullVideoUrl(job.video_url)}
-                        download="demoday-pitch.mp4"
-                        className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-medium transition"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Download MP4</span>
-                      </a>
-                    )}
-                  </div>
-
-                  {/* Video Player */}
-                  <div className="aspect-video bg-zinc-950 rounded-xl overflow-hidden relative border border-zinc-800/80 shadow-inner flex items-center justify-center">
-                    {job.video_url ? (
-                      <video
-                        controls
-                        autoPlay
-                        className="w-full h-full object-cover"
-                        src={getFullVideoUrl(job.video_url)}
-                      />
-                    ) : (
-                      <div className="text-center space-y-2 text-zinc-500 font-mono text-xs">
-                        <Film className="w-8 h-8 mx-auto text-zinc-600 animate-pulse" />
-                        <p>Video rendering in progress...</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-zinc-800/80 flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-white">
-                        {job.storyboard?.project_name}
-                      </h4>
-                      <p className="text-xs text-zinc-400">
-                        {job.storyboard?.tagline}
-                      </p>
-                    </div>
-                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
-                      fal.ai voice + Playwright
-                    </span>
-                  </div>
-                </div>
-
-                {/* Storyboard Script Timeline */}
-                <div className="glass-panel rounded-2xl p-5 space-y-3.5 border border-zinc-800">
-                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
-                    <h4 className="text-xs font-mono uppercase tracking-wider text-zinc-400">
-                      Storyboard Timeline
-                    </h4>
-                    <span className="text-[11px] font-mono text-emerald-400">
-                      {job.storyboard?.scenes.length ?? 0} Scenes
-                    </span>
-                  </div>
-
-                  <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
-                    {job.storyboard?.scenes.map((scene, idx) => (
-                      <div
-                        key={scene.id}
-                        className="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80 text-xs space-y-2 hover:border-zinc-700 transition"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-emerald-400 font-mono text-[11px]">
-                            Scene {idx + 1}: {scene.title}
-                          </span>
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">
-                            {scene.route}
-                          </span>
-                        </div>
-
-                        <p className="text-zinc-300 italic font-sans leading-relaxed text-[11px]">
-                          "{scene.narration}"
-                        </p>
-
-                        <div className="flex flex-wrap gap-1 pt-1">
-                          {scene.actions.map((act, aIdx) => (
-                            <span
-                              key={aIdx}
-                              className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400"
-                            >
-                              {act.type} {act.value ? `(${act.value})` : ""}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              <VideoTheater
+                videoUrl={job.video_url}
+                storyboard={job.storyboard}
+                elapsedSeconds={elapsedSeconds}
+              />
             )}
 
             {/* TAB 2: README */}
