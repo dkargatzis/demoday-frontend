@@ -18,7 +18,8 @@ import {
   Terminal,
 } from "lucide-react";
 import { checkBackendHealth, startPipelineJob } from "@/lib/api";
-import { JobStatus } from "@/lib/types";
+import type { HealthStatus } from "@/lib/types";
+import { useJobStream } from "@/lib/useJobStream";
 import { PipelineStepper } from "@/components/PipelineStepper";
 import { LogTerminal } from "@/components/LogTerminal";
 import { PipelineError } from "@/components/PipelineError";
@@ -48,23 +49,34 @@ export default function HomePage() {
   const [appUrl, setAppUrl] = useState("https://fastapi.tiangolo.com");
   const [voiceStyle, setVoiceStyle] = useState("energetic_tech");
   const [targetSeconds, setTargetSeconds] = useState(60);
-  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const backendOnline = health !== null;
 
-  const [job, setJob] = useState<JobStatus | null>(null);
+  // Live job state over SSE (/api/pipeline/events/{id}) with reconnects and a polling fallback.
+  const [jobId, setJobId] = useState<string | null>(null);
+  const { job, setJob, streamState } = useJobStream(jobId);
+  const [starting, setStarting] = useState(false);
   const [activeTab, setActiveTab] = useState<"video" | "readme" | "devpost" | "social">("video");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [initError, setInitError] = useState<string | null>(null);
 
   const formRef = useRef<HTMLFormElement>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
 
-  // Check health periodically
+  // Check health: every 3s while the backend is down (it may still be booting), every 15s once it's up
   useEffect(() => {
-    checkBackendHealth().then(setBackendOnline);
-    const interval = setInterval(() => {
-      checkBackendHealth().then(setBackendOnline);
-    }, 15000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = async () => {
+      const result = await checkBackendHealth();
+      if (cancelled) return;
+      setHealth(result);
+      timer = setTimeout(check, result ? 15000 : 3000);
+    };
+    void check();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, []);
 
   // Timer for elapsed pipeline runtime
@@ -80,15 +92,16 @@ export default function HomePage() {
     };
   }, [job?.status]);
 
+  // Locked from submit until the job ends, so a double click can't start two jobs. A lost stream unlocks it.
+  const busy =
+    starting || ((job?.status === "queued" || job?.status === "running") && streamState !== "lost");
+
   const handleStart = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (busy) return;
     setInitError(null);
     setElapsedSeconds(0);
-
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
+    setStarting(true);
 
     try {
       const initialJob = await startPipelineJob({
@@ -98,32 +111,11 @@ export default function HomePage() {
         target_seconds: targetSeconds,
       });
       setJob(initialJob);
-
-      // Connect to SSE stream
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const eventSource = new EventSource(`${API_BASE}/api/pipeline/stream/${initialJob.job_id}`);
-      eventSourceRef.current = eventSource;
-
-      eventSource.onmessage = (event) => {
-        try {
-          const updated: JobStatus = JSON.parse(event.data);
-          setJob(updated);
-          if (updated.status === "completed" || updated.status === "failed") {
-            eventSource.close();
-            eventSourceRef.current = null;
-          }
-        } catch (err) {
-          console.error("SSE parse error:", err);
-        }
-      };
-
-      eventSource.onerror = (err) => {
-        console.warn("SSE connection closed or interrupted:", err);
-        eventSource.close();
-        eventSourceRef.current = null;
-      };
+      setJobId(initialJob.job_id); // useJobStream subscribes to this job's event stream
     } catch (err: any) {
       setInitError(err.message || "Failed to start autonomous pipeline. Ensure FastAPI backend is running on :8000.");
+    } finally {
+      setStarting(false);
     }
   };
 
@@ -171,6 +163,20 @@ export default function HomePage() {
                 FastAPI {backendOnline ? "Online" : "Standby (:8000)"}
               </span>
             </div>
+            {health && (!health.ffmpeg || !health.gemini || !health.fal) && (
+              <div
+                className="hidden sm:flex items-center px-3 py-1.5 rounded-full border border-amber-500/30 bg-amber-950/30 text-[11px] font-mono text-amber-300"
+                title="The backend is missing keys or tools and will use fallbacks"
+              >
+                {[
+                  !health.ffmpeg && "FFmpeg missing",
+                  !health.gemini && "Gemini: templates",
+                  !health.fal && "fal.ai: local TTS",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </div>
+            )}
           </div>
         </header>
 
@@ -317,14 +323,12 @@ export default function HomePage() {
 
             <button
               type="submit"
-              disabled={job?.status === "running"}
+              disabled={busy}
               className="flex items-center justify-center space-x-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-zinc-950 font-bold text-xs tracking-wider uppercase transition shadow-lg shadow-emerald-500/20 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Sparkles className="w-4 h-4" />
               <span>
-                {job?.status === "running"
-                  ? "Orchestrating Demo..."
-                  : "Generate Demo & Launch Kit"}
+                {busy ? "Orchestrating Demo..." : "Generate Demo & Launch Kit"}
               </span>
             </button>
           </div>
@@ -333,6 +337,15 @@ export default function HomePage() {
         {/* Live Stepper, Error Banner, & Telemetry */}
         {job && (
           <section className="space-y-6 mb-10">
+            {streamState === "lost" && (job.status === "queued" || job.status === "running") && (
+              <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs flex items-center space-x-2.5 shadow-lg">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  Lost contact with the backend. It may have restarted, which clears in-memory jobs. Start a new run.
+                </span>
+              </div>
+            )}
+
             {/* Pipeline Stepper */}
             <PipelineStepper
               currentStage={job.stage}
@@ -377,7 +390,7 @@ export default function HomePage() {
                 }`}
               >
                 <Film className="w-4 h-4 text-emerald-400" />
-                <span>60s Demo Reel</span>
+                <span>{Math.round(job.storyboard?.total_duration_sec || targetSeconds)}s Demo Reel</span>
               </button>
 
               <button
@@ -468,7 +481,7 @@ export default function HomePage() {
             DemoDay Launch Studio • Built for GenAI Hackathons
           </p>
           <p className="text-[11px] text-zinc-600">
-            Gemini 2.0 Flash • fal.ai Audio Synthesis • Playwright Chromium • FFmpeg Stitched
+            {health?.gemini_model ?? "Gemini"} • fal.ai Audio Synthesis • Playwright Chromium • FFmpeg Stitched
           </p>
         </footer>
       </main>

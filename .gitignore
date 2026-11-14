@@ -1,0 +1,15 @@
+# dependencies
+node_modules/
+
+# next.js build output
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# local env files (keep .env.local.example committed)
+.env*.local
+
+# logs & OS noise
+npm-debug.log*
+.DS_Store

@@ -39,3 +39,12 @@ export interface JobStatus {
   video_url?: string;
   error?: string;
 }
+
+export interface HealthStatus {
+  status: string;
+  service: string;
+  ffmpeg: boolean;
+  gemini: boolean;
+  fal: boolean;
+  gemini_model: string;
+}

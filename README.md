@@ -3,7 +3,7 @@
 The developer dashboard client for DemoDay Launch Studio:
 - **Next.js 15 App Router** & React 19.
 - **Tailwind CSS & Lucide** dark hacker UI.
-- **Server-Sent Events (SSE)** client for live pipeline execution streaming.
+- **Server-Sent Events (SSE)** via `lib/useJobStream.ts`: live progress, stages and logs from `/api/pipeline/events/{job_id}`, with automatic reconnects and a polling fallback.
 - **Video Player** with direct MP4 download.
 - **Launch Kit Export Studio**: One-click copy for README.md, Devpost submission pitch, and X/LinkedIn social posts.
 
@@ -27,3 +27,9 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 npm run dev
 ```
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Checks
+```bash
+npm run typecheck   # tsc --noEmit
+npm run build       # production build
+```

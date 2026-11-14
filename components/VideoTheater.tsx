@@ -17,7 +17,7 @@ import {
   Radio,
 } from "lucide-react";
 import { Storyboard, Scene } from "@/lib/types";
-import { getFullVideoUrl } from "@/lib/api";
+import { getDownloadUrl, getFullVideoUrl } from "@/lib/api";
 
 interface VideoTheaterProps {
   videoUrl?: string;
@@ -37,6 +37,8 @@ export function VideoTheater({
   const [copiedLink, setCopiedLink] = useState(false);
 
   const fullUrl = videoUrl ? getFullVideoUrl(videoUrl) : "";
+  // `download` is ignored cross-origin, so ask the backend for an attachment response instead.
+  const downloadUrl = videoUrl ? getDownloadUrl(videoUrl) : "";
 
   // Compute scene time offsets
   const sceneOffsets = useMemo(() => {
@@ -152,7 +154,7 @@ export function VideoTheater({
 
           <div className="px-3 py-1.5 rounded-lg bg-zinc-950/80 border border-zinc-800 text-zinc-300">
             <span className="text-zinc-500 mr-1.5">Resolution:</span>
-            <span className="text-teal-300 font-bold">1080p 60fps</span>
+            <span className="text-teal-300 font-bold">1080p 30fps</span>
           </div>
 
           {elapsedSeconds && (
@@ -203,7 +205,7 @@ export function VideoTheater({
                     </button>
 
                     <a
-                      href={fullUrl}
+                      href={downloadUrl}
                       download="demoday-pitch.mp4"
                       className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition active:scale-95 shadow-sm"
                     >
@@ -256,7 +258,7 @@ export function VideoTheater({
                 {storyboard?.project_name || "Autonomous Product Demo"}
               </h4>
               <p className="text-xs text-zinc-400 mt-0.5">
-                {storyboard?.tagline || "Built autonomously with Gemini 2.0, fal.ai, and Playwright"}
+                {storyboard?.tagline || "Built autonomously with Gemini, fal.ai, and Playwright"}
               </p>
             </div>
 
