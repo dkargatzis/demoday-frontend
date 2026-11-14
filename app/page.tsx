@@ -21,11 +21,14 @@ import {
   Settings as SettingsIcon,
   ShieldCheck,
   Trash2,
+  Clapperboard,
+  Database,
 } from "lucide-react";
 import Link from "next/link";
-import { ApiError, checkBackendHealth, listAppLogins, originOf, startPipelineJob } from "@/lib/api";
-import type { AppLogin, HealthStatus } from "@/lib/types";
+import { ApiError, checkBackendHealth, listAppLogins, listFixtures, originOf, startPipelineJob } from "@/lib/api";
+import type { AppLogin, FixtureSet, HealthStatus } from "@/lib/types";
 import { useJobStream } from "@/lib/useJobStream";
+import { useLeaveGuard } from "@/lib/useLeaveGuard";
 import { AuthGate, type Session } from "@/components/AuthGate";
 import { PipelineStepper } from "@/components/PipelineStepper";
 import { LogTerminal } from "@/components/LogTerminal";
@@ -52,6 +55,8 @@ const PRESETS = [
 ];
 
 const MAX_REPOS = 5;
+const LEAVE_MESSAGE =
+  "Your demo is still being generated. If you leave this page, you'll lose its progress and results. Leave anyway?";
 
 function Dashboard({ session }: { session: Session }) {
   // Several repositories can describe one product (for example a frontend and a backend).
@@ -60,6 +65,11 @@ function Dashboard({ session }: { session: Session }) {
   // Saved app logins (Settings) let the recorder show pages behind the app's sign-in.
   const [appLogins, setAppLogins] = useState<AppLogin[]>([]);
   const [useAppLogin, setUseAppLogin] = useState(true);
+  // Optional AI intro/outro clips (fal.ai text-to-video), off by default because they use credits.
+  const [aiClips, setAiClips] = useState(false);
+  // Staged sample data sets (Settings) replace the app's API responses while recording.
+  const [fixtureSets, setFixtureSets] = useState<FixtureSet[]>([]);
+  const [useStagedData, setUseStagedData] = useState(true);
   const [voiceStyle, setVoiceStyle] = useState("energetic_tech");
   const [targetSeconds, setTargetSeconds] = useState(60);
   const [health, setHealth] = useState<HealthStatus | null>(null);
@@ -96,9 +106,13 @@ function Dashboard({ session }: { session: Session }) {
     listAppLogins()
       .then(setAppLogins)
       .catch(() => setAppLogins([]));
+    listFixtures()
+      .then(setFixtureSets)
+      .catch(() => setFixtureSets([]));
   }, []);
   const appOrigin = originOf(appUrl);
   const savedLogin = appLogins.find((login) => login.origin === appOrigin);
+  const stagedSet = fixtureSets.find((set) => set.origin === appOrigin && set.enabled_count > 0);
 
   const updateRepo = (index: number, value: string) =>
     setRepoUrls((urls) => urls.map((url, i) => (i === index ? value : url)));
@@ -119,6 +133,8 @@ function Dashboard({ session }: { session: Session }) {
   // Locked from submit until the job ends, so a double click can't start two jobs. A lost stream unlocks it.
   const busy =
     starting || ((job?.status === "queued" || job?.status === "running") && streamState !== "lost");
+  // Leaving mid-run loses the live progress and results, so ask first.
+  const confirmLeave = useLeaveGuard(busy, LEAVE_MESSAGE);
 
   const handleStart = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -134,6 +150,8 @@ function Dashboard({ session }: { session: Session }) {
         voice_style: voiceStyle,
         target_seconds: targetSeconds,
         use_app_login: useAppLogin,
+        ai_clips: aiClips,
+        use_staged_data: useStagedData,
       });
       setJob(initialJob);
       setJobId(initialJob.job_id); // useJobStream subscribes to this job's event stream
@@ -214,7 +232,7 @@ function Dashboard({ session }: { session: Session }) {
             </Link>
             <button
               type="button"
-              onClick={session.logout}
+              onClick={() => confirmLeave() && session.logout()}
               title="Sign out"
               className="p-2 rounded-full glass-panel text-zinc-400 hover:text-white transition"
             >
@@ -368,6 +386,18 @@ function Dashboard({ session }: { session: Session }) {
                   Pages behind a login? Save an app login in Settings
                 </Link>
               )}
+              {stagedSet && (
+                <label className="flex items-center gap-2 text-[11px] font-mono text-zinc-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={useStagedData}
+                    onChange={(e) => setUseStagedData(e.target.checked)}
+                    className="accent-emerald-500"
+                  />
+                  <Database className="w-3.5 h-3.5 text-emerald-400" />
+                  Show staged sample data ({stagedSet.enabled_count} endpoints, labelled in the video)
+                </label>
+              )}
             </div>
           </div>
 
@@ -408,12 +438,31 @@ function Dashboard({ session }: { session: Session }) {
                   ))}
                 </div>
               </div>
+
+              <label
+                className="flex items-center space-x-2 cursor-pointer select-none"
+                title={
+                  health?.fal
+                    ? "Adds a short AI-generated opening and closing shot with your project's name and URL. Uses fal.ai video credits (about $0.25 per clip)."
+                    : "FAL_KEY isn't set on the backend, so the intro and outro will be typeset title cards without AI footage."
+                }
+              >
+                <input
+                  type="checkbox"
+                  checked={aiClips}
+                  onChange={(e) => setAiClips(e.target.checked)}
+                  className="accent-emerald-500"
+                />
+                <Clapperboard className="w-4 h-4 text-zinc-400" />
+                <span className="text-zinc-400">AI intro & outro</span>
+                <span className="text-[10px] text-zinc-500">{health?.fal ? "fal.ai · ~$0.50" : "titles only"}</span>
+              </label>
             </div>
 
             <button
               type="submit"
               disabled={busy}
-              className="flex items-center justify-center space-x-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-zinc-950 font-bold text-xs tracking-wider uppercase transition shadow-lg shadow-emerald-500/20 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="shrink-0 whitespace-nowrap flex items-center justify-center space-x-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-zinc-950 font-bold text-xs tracking-wider uppercase transition shadow-lg shadow-emerald-500/20 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Sparkles className="w-4 h-4" />
               <span>

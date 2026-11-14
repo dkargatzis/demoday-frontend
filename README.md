@@ -9,6 +9,8 @@ The developer dashboard client for DemoDay Launch Studio:
 - **Accounts**: `/login` (sign in or create an account); the dashboard (`/`) and `/settings` are only available signed in.
 - **Settings**: a GitHub token for private repositories, and app logins captured through a live view of a server-side
   browser, so demos can record pages behind your app's sign-in.
+- **Staged sample data** (Settings): capture your dashboard's API responses, let Gemini rewrite them as rich sample
+  data of the same shape, review and edit them, and replay them in demos (labelled "Sample data" in the video).
 
 Open the dashboard at `http://localhost:3000` (not `127.0.0.1`): the backend's session cookie is shared with
 `localhost`, and a different host name would be treated as another site.

@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, ArrowLeft, Loader2, Lock, ShieldCheck, X } from "lucide-react";
 import { cancelCapture, captureSocketUrl, finishCapture, originOf, startCapture } from "@/lib/api";
+import { useLeaveGuard } from "@/lib/useLeaveGuard";
 import type { AppLogin } from "@/lib/types";
 
 const SPECIAL_KEYS = new Set([
@@ -146,6 +147,8 @@ export function LoginCapture({
   };
 
   const origin = originOf(appUrl) ?? appUrl;
+  // Leaving closes the sign-in browser without saving anything.
+  useLeaveGuard(!error, "You're signing in to your app. If you leave, the sign-in browser closes and nothing is saved. Leave anyway?");
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overscroll-contain">

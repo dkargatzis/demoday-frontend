@@ -1,6 +1,7 @@
 import type {
   AppLogin,
   CaptureStart,
+  FixtureSet,
   GitHubConnection,
   HealthStatus,
   JobStatus,
@@ -73,6 +74,8 @@ export function startPipelineJob(data: {
   voice_style?: string;
   target_seconds?: number;
   use_app_login?: boolean;
+  ai_clips?: boolean;
+  use_staged_data?: boolean;
 }): Promise<JobStatus> {
   return request<JobStatus>("/api/pipeline/start", json(data));
 }
@@ -123,6 +126,23 @@ export const finishCapture = (captureId: string) =>
 
 export const cancelCapture = (captureId: string) =>
   request<{ ok: boolean }>(`/api/app-logins/capture/${encodeURIComponent(captureId)}`, { method: "DELETE" });
+
+// ---------------------------------------------------------------- staged sample data
+
+export const listFixtures = () => request<FixtureSet[]>("/api/fixtures");
+
+export const getFixture = (id: string) => request<FixtureSet>(`/api/fixtures/${encodeURIComponent(id)}`);
+
+export const captureFixtures = (appUrl: string) => request<FixtureSet>("/api/fixtures/capture", json({ app_url: appUrl }));
+
+export const polishFixtures = (id: string, brief: string) =>
+  request<FixtureSet>(`/api/fixtures/${encodeURIComponent(id)}/polish`, json({ brief }));
+
+export const updateFixtures = (id: string, entries: unknown[]) =>
+  request<FixtureSet>(`/api/fixtures/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ entries }) });
+
+export const deleteFixtures = (id: string) =>
+  request<{ ok: boolean }>(`/api/fixtures/${encodeURIComponent(id)}`, { method: "DELETE" });
 
 /** WebSocket for the live sign-in view (the browser sends the session cookie on the handshake). */
 export function captureSocketUrl(captureId: string): string {

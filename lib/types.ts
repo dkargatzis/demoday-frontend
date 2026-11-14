@@ -19,6 +19,10 @@ export interface Storyboard {
   tagline: string;
   scenes: Scene[];
   total_duration_sec: number;
+  intro_sec?: number; // AI intro length before scene 1 (0 without AI clips)
+  outro_sec?: number;
+  intro_visual?: string | null;
+  outro_visual?: string | null;
 }
 
 export interface LaunchKit {
@@ -85,4 +89,26 @@ export interface CaptureStart {
   capture_id: string;
   origin: string;
   viewport: { width: number; height: number };
+}
+
+export interface FixtureEntry {
+  url: string;
+  method: string;
+  status: number;
+  body: unknown;
+  post_data?: string | null;
+  enabled: boolean;
+  source: string;
+}
+
+export interface FixtureSet {
+  id: string;
+  origin: string;
+  polished: boolean;
+  brief: string;
+  updated_at: number;
+  entry_count: number;
+  enabled_count: number;
+  entries?: FixtureEntry[];
+  note?: string;
 }

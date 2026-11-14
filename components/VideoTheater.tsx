@@ -43,7 +43,7 @@ export function VideoTheater({
   // Compute scene time offsets
   const sceneOffsets = useMemo(() => {
     if (!storyboard?.scenes) return [];
-    let cumulative = 0;
+    let cumulative = storyboard.intro_sec ?? 0; // scenes start after the AI intro, when there is one
     const defaultSceneDuration =
       storyboard.total_duration_sec > 0
         ? storyboard.total_duration_sec / storyboard.scenes.length

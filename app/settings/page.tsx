@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { AuthGate, type Session } from "@/components/AuthGate";
 import { LoginCapture } from "@/components/LoginCapture";
+import { StagedData } from "@/components/StagedData";
+import { checkBackendHealth } from "@/lib/api";
 import { deleteAppLogin, deleteGitHubToken, getSettings, originOf, saveGitHubToken } from "@/lib/api";
 import type { Settings } from "@/lib/types";
 
@@ -33,6 +35,10 @@ function SettingsView({ session }: { session: Session }) {
   const [captureUrl, setCaptureUrl] = useState("");
   const [capturing, setCapturing] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [geminiAvailable, setGeminiAvailable] = useState(true);
+  useEffect(() => {
+    checkBackendHealth().then((h) => setGeminiAvailable(Boolean(h?.gemini)));
+  }, []);
 
   const reload = useCallback(() => {
     getSettings()
@@ -208,6 +214,8 @@ function SettingsView({ session }: { session: Session }) {
             </button>
           </form>
         </section>
+        <StagedData suggestedUrl={settings?.app_logins[0]?.last_url || settings?.app_logins[0]?.origin}
+          geminiAvailable={geminiAvailable} />
       </main>
 
       {capturing && (
