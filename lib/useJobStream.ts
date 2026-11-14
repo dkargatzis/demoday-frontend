@@ -29,7 +29,7 @@ export function useJobStream(jobId: string | null) {
     }
     let disposed = false;
     let pollTimer: ReturnType<typeof setTimeout> | undefined;
-    const source = new EventSource(jobEventsUrl(jobId));
+    const source = new EventSource(jobEventsUrl(jobId), { withCredentials: true }); // sends the session cookie
 
     const apply = (next: JobStatus): boolean => {
       if (disposed || next.job_id !== jobId) return false;

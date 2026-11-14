@@ -16,10 +16,17 @@ import {
   Sliders,
   CheckCircle2,
   Terminal,
+  LogOut,
+  Plus,
+  Settings as SettingsIcon,
+  ShieldCheck,
+  Trash2,
 } from "lucide-react";
-import { checkBackendHealth, startPipelineJob } from "@/lib/api";
-import type { HealthStatus } from "@/lib/types";
+import Link from "next/link";
+import { ApiError, checkBackendHealth, listAppLogins, originOf, startPipelineJob } from "@/lib/api";
+import type { AppLogin, HealthStatus } from "@/lib/types";
 import { useJobStream } from "@/lib/useJobStream";
+import { AuthGate, type Session } from "@/components/AuthGate";
 import { PipelineStepper } from "@/components/PipelineStepper";
 import { LogTerminal } from "@/components/LogTerminal";
 import { PipelineError } from "@/components/PipelineError";
@@ -44,9 +51,15 @@ const PRESETS = [
   },
 ];
 
-export default function HomePage() {
-  const [repoUrl, setRepoUrl] = useState("https://github.com/fastapi/fastapi");
+const MAX_REPOS = 5;
+
+function Dashboard({ session }: { session: Session }) {
+  // Several repositories can describe one product (for example a frontend and a backend).
+  const [repoUrls, setRepoUrls] = useState<string[]>(["https://github.com/fastapi/fastapi"]);
   const [appUrl, setAppUrl] = useState("https://fastapi.tiangolo.com");
+  // Saved app logins (Settings) let the recorder show pages behind the app's sign-in.
+  const [appLogins, setAppLogins] = useState<AppLogin[]>([]);
+  const [useAppLogin, setUseAppLogin] = useState(true);
   const [voiceStyle, setVoiceStyle] = useState("energetic_tech");
   const [targetSeconds, setTargetSeconds] = useState(60);
   const [health, setHealth] = useState<HealthStatus | null>(null);
@@ -79,6 +92,17 @@ export default function HomePage() {
     };
   }, []);
 
+  useEffect(() => {
+    listAppLogins()
+      .then(setAppLogins)
+      .catch(() => setAppLogins([]));
+  }, []);
+  const appOrigin = originOf(appUrl);
+  const savedLogin = appLogins.find((login) => login.origin === appOrigin);
+
+  const updateRepo = (index: number, value: string) =>
+    setRepoUrls((urls) => urls.map((url, i) => (i === index ? value : url)));
+
   // Timer for elapsed pipeline runtime
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
@@ -105,14 +129,16 @@ export default function HomePage() {
 
     try {
       const initialJob = await startPipelineJob({
-        repo_url: repoUrl,
+        repo_urls: repoUrls.map((url) => url.trim()).filter(Boolean),
         app_url: appUrl,
         voice_style: voiceStyle,
         target_seconds: targetSeconds,
+        use_app_login: useAppLogin,
       });
       setJob(initialJob);
       setJobId(initialJob.job_id); // useJobStream subscribes to this job's event stream
     } catch (err: any) {
+      if (err instanceof ApiError && err.status === 401) return session.logout(); // session expired
       setInitError(err.message || "Failed to start autonomous pipeline. Ensure FastAPI backend is running on :8000.");
     } finally {
       setStarting(false);
@@ -177,6 +203,23 @@ export default function HomePage() {
                   .join(" · ")}
               </div>
             )}
+            <span className="hidden lg:inline text-[11px] font-mono text-zinc-500">{session.user.email}</span>
+            <Link
+              href="/settings"
+              title="Settings: GitHub access and app logins"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full glass-panel text-xs font-mono text-zinc-300 hover:text-white transition"
+            >
+              <SettingsIcon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Settings</span>
+            </Link>
+            <button
+              type="button"
+              onClick={session.logout}
+              title="Sign out"
+              className="p-2 rounded-full glass-panel text-zinc-400 hover:text-white transition"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
           </div>
         </header>
 
@@ -211,7 +254,7 @@ export default function HomePage() {
                 key={p.name}
                 type="button"
                 onClick={() => {
-                  setRepoUrl(p.repo);
+                  setRepoUrls([p.repo]);
                   setAppUrl(p.app);
                 }}
                 className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-300 transition text-[11px] font-mono"
@@ -249,17 +292,46 @@ export default function HomePage() {
             <div className="space-y-2">
               <label className="flex items-center space-x-2 text-xs font-mono uppercase text-zinc-400 tracking-wider">
                 <Github className="w-3.5 h-3.5 text-emerald-400" />
-                <span>GitHub Repository URL</span>
+                <span>GitHub Repositor{repoUrls.length > 1 ? "ies" : "y"} URL</span>
               </label>
-              <div className="relative">
-                <input
-                  type="url"
-                  required
-                  value={repoUrl}
-                  onChange={(e) => setRepoUrl(e.target.value)}
-                  placeholder="https://github.com/owner/repo"
-                  className="w-full px-4 py-3 bg-zinc-950/80 border border-zinc-800 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 font-mono transition"
-                />
+              {repoUrls.map((url, index) => (
+                <div key={index} className="relative flex items-center gap-2">
+                  <input
+                    type="url"
+                    required={index === 0}
+                    value={url}
+                    onChange={(e) => updateRepo(index, e.target.value)}
+                    placeholder={index === 0 ? "https://github.com/owner/repo" : "https://github.com/owner/another-repo"}
+                    aria-label={`Repository ${index + 1}`}
+                    className="w-full px-4 py-3 bg-zinc-950/80 border border-zinc-800 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 font-mono transition"
+                  />
+                  {index > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setRepoUrls((urls) => urls.filter((_, i) => i !== index))}
+                      aria-label={`Remove repository ${index + 1}`}
+                      className="p-2.5 rounded-xl text-zinc-500 hover:text-rose-300 hover:bg-rose-950/30 border border-zinc-800 transition shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
+                {repoUrls.length < MAX_REPOS ? (
+                  <button
+                    type="button"
+                    onClick={() => setRepoUrls((urls) => [...urls, ""])}
+                    className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add repository (frontend, backend…)
+                  </button>
+                ) : (
+                  <span className="text-zinc-500">Up to {MAX_REPOS} repositories</span>
+                )}
+                <Link href="/settings" className="text-zinc-500 hover:text-zinc-300 transition">
+                  Private repo? Add a GitHub token
+                </Link>
               </div>
             </div>
 
@@ -279,6 +351,23 @@ export default function HomePage() {
                   className="w-full px-4 py-3 bg-zinc-950/80 border border-zinc-800 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 font-mono transition"
                 />
               </div>
+              {savedLogin ? (
+                <label className="flex items-center gap-2 text-[11px] font-mono text-zinc-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={useAppLogin}
+                    onChange={(e) => setUseAppLogin(e.target.checked)}
+                    className="accent-emerald-500"
+                  />
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  Record signed in with your saved login
+                </label>
+              ) : (
+                <Link href="/settings" className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-500 hover:text-zinc-300 transition">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Pages behind a login? Save an app login in Settings
+                </Link>
+              )}
             </div>
           </div>
 
@@ -487,4 +576,8 @@ export default function HomePage() {
       </main>
     </div>
   );
+}
+
+export default function HomePage() {
+  return <AuthGate>{(session) => <Dashboard session={session} />}</AuthGate>;
 }
