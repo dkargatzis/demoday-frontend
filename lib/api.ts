@@ -9,7 +9,14 @@ import type {
   User,
 } from "./types";
 
-export const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
+// "" means same origin (the production build is served by the backend itself); unset means local dev on :8000.
+export const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
+
+/** Absolute origin of the API, for WebSocket URLs and share links (API_BASE may be relative/empty). */
+export function apiOrigin(): string {
+  if (API_BASE) return API_BASE;
+  return typeof window === "undefined" ? "" : window.location.origin;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -31,7 +38,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       headers: { ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers },
     });
   } catch {
-    throw new ApiError(0, `Cannot reach the backend at ${API_BASE}. Is it running?`);
+    throw new ApiError(0, `Cannot reach the backend at ${apiOrigin() || "this server"}. Is it running?`);
   }
   if (!res.ok) throw new ApiError(res.status, await describeError(res));
   return (await res.json()) as T;
@@ -146,7 +153,23 @@ export const deleteFixtures = (id: string) =>
 
 /** WebSocket for the live sign-in view (the browser sends the session cookie on the handshake). */
 export function captureSocketUrl(captureId: string): string {
-  return `${API_BASE.replace(/^http/, "ws")}/api/app-logins/capture/${encodeURIComponent(captureId)}/ws`;
+  return `${apiOrigin().replace(/^http/, "ws")}/api/app-logins/capture/${encodeURIComponent(captureId)}/ws`;
+}
+
+/** A link to the finished video that works without signing in (a copy in the server's public share bucket),
+ *  or the signed-in player URL when the server has no bucket configured. */
+export async function getShareLink(relativeOrFullUrl: string): Promise<{ url: string; shareable: boolean }> {
+  const match = relativeOrFullUrl.match(/\/api\/pipeline\/video\/([a-f0-9]+)/);
+  if (match) {
+    try {
+      const shared = await request<{ url: string; expires_at: number | null }>(`/api/pipeline/share/${match[1]}`, { method: "POST" });
+      return { url: shared.url, shareable: true };
+    } catch {
+      // no bucket on this server, or signing failed: fall back to the player URL
+    }
+  }
+  const full = getFullVideoUrl(relativeOrFullUrl);
+  return { url: full.startsWith("http") ? full : `${apiOrigin()}${full}`, shareable: false };
 }
 
 /** scheme://host[:port] of a URL, matching how the backend keys saved app logins. */

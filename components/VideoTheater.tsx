@@ -17,7 +17,7 @@ import {
   Radio,
 } from "lucide-react";
 import { Storyboard, Scene } from "@/lib/types";
-import { getDownloadUrl, getFullVideoUrl } from "@/lib/api";
+import { getDownloadUrl, getFullVideoUrl, getShareLink } from "@/lib/api";
 
 interface VideoTheaterProps {
   videoUrl?: string;
@@ -107,11 +107,23 @@ export function VideoTheater({
     setIsPlaying(true);
   };
 
-  const handleCopyLink = () => {
-    if (!fullUrl) return;
-    navigator.clipboard.writeText(fullUrl);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
+  const handleCopyLink = async () => {
+    if (!videoUrl) return;
+    // Prefer a link that works for anyone (public share copy); otherwise the signed-in player URL.
+    const linkPromise = getShareLink(videoUrl).then((link) => link.url);
+    try {
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        // Passing a promise keeps the user gesture alive while the link is fetched (needed by Safari).
+        const blob = linkPromise.then((url) => new Blob([url], { type: "text/plain" }));
+        await navigator.clipboard.write([new ClipboardItem({ "text/plain": blob })]);
+      } else {
+        await navigator.clipboard.writeText(await linkPromise);
+      }
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      window.prompt("Copy this link:", await linkPromise);
+    }
   };
 
   const formatSeconds = (sec: number) => {
