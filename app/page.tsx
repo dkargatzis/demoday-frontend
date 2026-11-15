@@ -37,6 +37,7 @@ import { AgentTrace, LedgerStrip } from "@/components/AgentTrace";
 import { LogTerminal } from "@/components/LogTerminal";
 import { PipelineError } from "@/components/PipelineError";
 import { VideoTheater } from "@/components/VideoTheater";
+import { ScriptPanel } from "@/components/ScriptPanel";
 import { MarkdownViewer } from "@/components/MarkdownViewer";
 import { Personalize, AudienceBriefCard, NextCustomerStrip, emptyAudience } from "@/components/Personalize";
 import { Outreach } from "@/components/Outreach";
@@ -190,6 +191,31 @@ function Dashboard({ session }: { session: Session }) {
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 401) return session.logout(); // session expired
       setInitError(err.message || "Failed to start autonomous pipeline. Ensure FastAPI backend is running on :8000.");
+    } finally {
+      setStarting(false);
+    }
+  };
+  // A frozen script: the finished job's pages, steps and pacing recorded again (lines may be rewritten), no planning.
+  const rerecord = async (lines: string[]) => {
+    if (busy || !job?.app_url) return;
+    setInitError(null);
+    setElapsedSeconds(0);
+    setStarting(true);
+    try {
+      const started = await startPipelineJob({
+        repo_urls: [],
+        app_url: job.app_url,
+        voice_style: voiceStyle,
+        from_job: job.job_id,
+        ...(lines.some(Boolean) ? { narration: lines } : {}),
+      });
+      setActiveTab("video");
+      setJob(started);
+      setJobId(started.job_id);
+      window.history.replaceState(null, "", `?job=${started.job_id}`);
+    } catch (err: any) {
+      if (err instanceof ApiError && err.status === 401) return session.logout();
+      setInitError(err.message || "Could not re-record the script");
     } finally {
       setStarting(false);
     }
@@ -692,12 +718,15 @@ function Dashboard({ session }: { session: Session }) {
 
             {/* TAB 1: Interactive Video Theater */}
             {activeTab === "video" && (
-              <VideoTheater
-                videoUrl={job.video_url}
-                coverUrl={job.cover_url}
-                storyboard={job.storyboard}
-                elapsedSeconds={elapsedSeconds}
-              />
+              <>
+                <VideoTheater
+                  videoUrl={job.video_url}
+                  coverUrl={job.cover_url}
+                  storyboard={job.storyboard}
+                  elapsedSeconds={elapsedSeconds}
+                />
+                <ScriptPanel job={job} busy={busy} onRerecord={rerecord} />
+              </>
             )}
 
             {/* Outreach: the email and LinkedIn DM for this customer, copied with the share link */}

@@ -86,6 +86,8 @@ export function startPipelineJob(data: {
   use_staged_data?: boolean;
   audience?: AudienceInput | null;
   instructions?: string; // what the demo must show, in the founder's words; the tour follows it
+  from_job?: string; // re-record that finished video's script (no planning)
+  narration?: string[]; // with from_job: one replacement line per scene ("" keeps the recorded line)
 }): Promise<JobStatus> {
   return request<JobStatus>("/api/pipeline/start", json(data));
 }

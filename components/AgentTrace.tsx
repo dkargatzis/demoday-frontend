@@ -95,6 +95,7 @@ const ORDER: RowSpec[] = [
   { id: "funnels", label: "Find funnels", tool: "gemini" },
   { id: "storyboard", label: "Plan", tool: "gemini", core: true },
   { id: "plancheck", label: "Check plan", tool: "gemini" },
+  { id: "rehearse", label: "Dry run", tool: "chromium" },
   { id: "ai_clips", label: "AI clips", tool: "fal" },
   { id: "cover", label: "Cover art", tool: "fal" },
   { id: "music", label: "Soundtrack", tool: "fal" },
