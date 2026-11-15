@@ -1,3 +1,4 @@
+import type { AudienceInput } from "./audience";
 import type {
   AppLogin,
   CaptureStart,
@@ -83,6 +84,7 @@ export function startPipelineJob(data: {
   use_app_login?: boolean;
   ai_clips?: boolean;
   use_staged_data?: boolean;
+  audience?: AudienceInput | null;
 }): Promise<JobStatus> {
   return request<JobStatus>("/api/pipeline/start", json(data));
 }

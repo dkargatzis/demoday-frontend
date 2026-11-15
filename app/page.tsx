@@ -22,6 +22,8 @@ import {
   ShieldCheck,
   Trash2,
   Database,
+  Mail,
+  ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
 import { ApiError, checkBackendHealth, listAppLogins, listFixtures, originOf, startPipelineJob } from "@/lib/api";
@@ -34,6 +36,11 @@ import { LogTerminal } from "@/components/LogTerminal";
 import { PipelineError } from "@/components/PipelineError";
 import { VideoTheater } from "@/components/VideoTheater";
 import { MarkdownViewer } from "@/components/MarkdownViewer";
+import { Personalize, AudienceBriefCard, NextCustomerStrip, emptyAudience } from "@/components/Personalize";
+import { Outreach } from "@/components/Outreach";
+import { CustomerDemos, type MakeAnotherSeed } from "@/components/CustomerDemos";
+import { audienceOf, audiencePayload, type AudienceInput, type JobWithAudience } from "@/lib/audience";
+import { useDemoQueue } from "@/lib/useDemoQueue";
 
 const PRESETS = [
   {
@@ -76,11 +83,16 @@ function Dashboard({ session }: { session: Session }) {
   const [jobId, setJobId] = useState<string | null>(null);
   const { job, setJob, streamState, stepExtras, stepMarks } = useJobStream(jobId);
   const [starting, setStarting] = useState(false);
-  const [activeTab, setActiveTab] = useState<"video" | "readme" | "devpost" | "social">("video");
+  const [activeTab, setActiveTab] = useState<"video" | "outreach" | "readme" | "devpost" | "social">("video");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [initError, setInitError] = useState<string | null>(null);
 
   const formRef = useRef<HTMLFormElement>(null);
+  // Personalized demos: one video per ideal customer (who will watch, their site, the next step).
+  const [audience, setAudience] = useState<AudienceInput | null>(null);
+  const [personalizeOpen, setPersonalizeOpen] = useState(false);
+  const companyRef = useRef<HTMLInputElement>(null);
+  const [demosKey, setDemosKey] = useState(0);
 
   // /?job=<id> reopens a job (the presenter's plan-B tab): the stream replays every event, thumbnails included,
   // while the job is in memory; after a restart the hook gets the final snapshot with its steps and tool calls.
@@ -137,12 +149,22 @@ function Dashboard({ session }: { session: Session }) {
   // Locked from submit until the job ends, so a double click can't start two jobs. A lost stream unlocks it.
   const busy =
     starting || ((job?.status === "queued" || job?.status === "running") && streamState !== "lost");
-  // Leaving mid-run loses the live progress and results, so ask first.
-  const confirmLeave = useLeaveGuard(busy, LEAVE_MESSAGE);
+  const brief = audienceOf(job); // null for generic runs
+  const kit = (job as JobWithAudience | null)?.launch_kit;
+  const outreach = kit?.outreach_email ?? null;
+  useEffect(() => {
+    if (job?.status === "completed" || job?.status === "failed") setDemosKey((k) => k + 1); // the board reloads
+  }, [job?.status]);
 
-  const handleStart = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  // `explicit` is a queued customer; otherwise the open Personalize panel decides (closed or empty = generic demo).
+  const startWith = async (explicit?: AudienceInput | null) => {
     if (busy) return;
+    const chosen = explicit === undefined ? (personalizeOpen ? audience : null) : explicit;
+    const audienceField = audiencePayload(chosen);
+    if (explicit) {
+      setAudience(explicit);
+      setPersonalizeOpen(true);
+    }
     setInitError(null);
     setElapsedSeconds(0);
     setStarting(true);
@@ -155,7 +177,9 @@ function Dashboard({ session }: { session: Session }) {
         target_seconds: targetSeconds,
         use_app_login: useAppLogin,
         use_staged_data: useStagedData,
+        ...(audienceField ? { audience: audienceField } : {}),
       });
+      setActiveTab("video");
       setJob(initialJob);
       setJobId(initialJob.job_id); // useJobStream subscribes to this job's event stream
       window.history.replaceState(null, "", `?job=${initialJob.job_id}`); // a reload or a plan-B tab reopens it
@@ -166,6 +190,24 @@ function Dashboard({ session }: { session: Session }) {
       setStarting(false);
     }
   };
+  const handleStart = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    return startWith();
+  };
+
+  // "Make another for the next customer": same app, repos, tone and next step; a new person to make it for.
+  const makeAnother = (seed: MakeAnotherSeed) => {
+    setAppUrl(seed.appUrl);
+    setAudience({ ...emptyAudience(), persona: seed.persona, goal: seed.goal, cta_url: seed.ctaUrl ?? "" });
+    setPersonalizeOpen(true);
+    formRef.current?.scrollIntoView({ behavior: "smooth" });
+    requestAnimationFrame(() => companyRef.current?.focus());
+  };
+
+  // Several customers in a row: each starts when the previous job ends (recording is one at a time anyway).
+  const { queue, enqueue, cancel } = useDemoQueue({ jobStatus: job?.status, starting, startWith });
+  // Leaving mid-run (or with customers still queued) loses the progress and results, so ask first.
+  const confirmLeave = useLeaveGuard(busy || queue.length > 0, LEAVE_MESSAGE);
 
   const handleEditInputs = () => {
     formRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -405,6 +447,16 @@ function Dashboard({ session }: { session: Session }) {
             </div>
           </div>
 
+          <Personalize
+            value={audience}
+            onChange={setAudience}
+            open={personalizeOpen}
+            onOpenChange={setPersonalizeOpen}
+            disabled={busy}
+            geminiAvailable={!!health?.gemini}
+            focusRef={companyRef}
+          />
+
           {/* Options Row */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 pt-4 border-t border-zinc-800/80">
             <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
@@ -452,7 +504,11 @@ function Dashboard({ session }: { session: Session }) {
             >
               <Sparkles className="w-4 h-4" />
               <span>
-                {busy ? "Orchestrating Demo..." : "Generate Demo & Launch Kit"}
+                {busy
+                  ? "Orchestrating Demo..."
+                  : personalizeOpen && audience?.company.trim()
+                    ? `Generate Demo for ${audience.company.trim()}`
+                    : "Generate Demo & Launch Kit"}
               </span>
             </button>
           </div>
@@ -475,6 +531,17 @@ function Dashboard({ session }: { session: Session }) {
 
             {/* Tool ledger: every Gemini and fal.ai call, live */}
             <LedgerStrip calls={job.tool_calls} status={job.status} />
+
+            {/* Who this demo is for: the customer brief, live (facts from their site, labelled assumptions) */}
+            {brief && <AudienceBriefCard brief={brief} sceneCount={job.storyboard?.scenes.length} />}
+            {queue.length > 0 && (
+              <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-zinc-900/80 border border-zinc-800 text-xs font-mono text-zinc-300">
+                <span>Next: {queue.map((a) => a.company).join(", ")}</span>
+                <button type="button" onClick={cancel} className="text-zinc-400 hover:text-rose-300 transition">
+                  Cancel the rest
+                </button>
+              </div>
+            )}
 
             {/* Error State Card (if failed) */}
             {job.status === "failed" && (
@@ -501,6 +568,31 @@ function Dashboard({ session }: { session: Session }) {
         {/* Deliverables Workspace Showcase (on completion) */}
         {job?.status === "completed" && (
           <section className="space-y-6 pt-4">
+            {brief ? (
+              <NextCustomerStrip
+                company={brief.company}
+                durationSec={job.storyboard?.total_duration_sec}
+                videoUrl={job.video_url}
+                kit={kit}
+                onNext={() =>
+                  makeAnother({
+                    appUrl: job.app_url ?? appUrl,
+                    persona: brief.persona,
+                    goal: brief.goal ?? "book_call",
+                    ctaUrl: brief.cta_url ?? undefined,
+                  })
+                }
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => makeAnother({ appUrl, persona: "", goal: "book_call" })}
+                className="flex items-center gap-2 text-xs font-mono text-emerald-400 hover:text-emerald-300 transition"
+              >
+                Now make this one for a customer <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+
             {/* Tab Navigation Dock */}
             <div className="flex flex-wrap gap-2 p-1.5 rounded-xl bg-zinc-900/80 border border-zinc-800/80 backdrop-blur-md">
               <button
@@ -514,6 +606,18 @@ function Dashboard({ session }: { session: Session }) {
                 <Film className="w-4 h-4 text-emerald-400" />
                 <span>{Math.round(job.storyboard?.total_duration_sec || targetSeconds)}s Demo Reel</span>
               </button>
+
+              {outreach && (
+                <button
+                  onClick={() => setActiveTab("outreach")}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold transition ${
+                    activeTab === "outreach" ? "bg-zinc-800 text-white shadow-md" : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  <Mail className="w-4 h-4 text-emerald-400" />
+                  <span>Outreach</span>
+                </button>
+              )}
 
               <button
                 onClick={() => setActiveTab("readme")}
@@ -561,6 +665,17 @@ function Dashboard({ session }: { session: Session }) {
               />
             )}
 
+            {/* Outreach: the email and LinkedIn DM for this customer, copied with the share link */}
+            {activeTab === "outreach" && outreach && (
+              <Outreach
+                email={outreach}
+                dm={kit?.linkedin_dm}
+                videoUrl={job.video_url}
+                company={brief?.company ?? ""}
+                firstName={brief?.first_name}
+              />
+            )}
+
             {/* TAB 2: README */}
             {activeTab === "readme" && job.launch_kit && (
               <MarkdownViewer
@@ -596,6 +711,23 @@ function Dashboard({ session }: { session: Session }) {
             )}
           </section>
         )}
+
+        {/* Customer demos for this app: one row per personalized video, and "Make another" */}
+        <CustomerDemos
+          appUrl={appUrl}
+          currentJob={job}
+          refreshKey={demosKey}
+          busy={busy}
+          onOpen={(id) => {
+            setActiveTab("video");
+            setElapsedSeconds(0);
+            setJobId(id);
+            window.history.replaceState(null, "", `?job=${id}`);
+          }}
+          onMakeAnother={makeAnother}
+          onStartBatch={enqueue}
+          batchDefaults={{ goal: audience?.goal ?? "book_call", cta_url: audience?.cta_url }}
+        />
 
         {/* Footer */}
         <footer className="mt-16 pt-8 border-t border-zinc-800/80 text-center text-xs text-zinc-500 font-mono space-y-2">
