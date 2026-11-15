@@ -6,6 +6,7 @@ import {
   Sparkles,
   Github,
   Globe,
+  ListChecks,
   Mic,
   Clock,
   Film,
@@ -68,6 +69,7 @@ function Dashboard({ session }: { session: Session }) {
   // Several repositories can describe one product (for example a frontend and a backend).
   const [repoUrls, setRepoUrls] = useState<string[]>(["https://github.com/fastapi/fastapi"]);
   const [appUrl, setAppUrl] = useState("https://fastapi.tiangolo.com");
+  const [instructions, setInstructions] = useState(""); // "What to show": the founder's own steps for the tour
   // Saved app logins (Settings) let the recorder show pages behind the app's sign-in.
   const [appLogins, setAppLogins] = useState<AppLogin[]>([]);
   const [useAppLogin, setUseAppLogin] = useState(true);
@@ -178,6 +180,7 @@ function Dashboard({ session }: { session: Session }) {
         use_app_login: useAppLogin,
         use_staged_data: useStagedData,
         ...(audienceField ? { audience: audienceField } : {}),
+        ...(instructions.trim() ? { instructions: instructions.trim() } : {}),
       });
       setActiveTab("video");
       setJob(initialJob);
@@ -445,6 +448,28 @@ function Dashboard({ session }: { session: Session }) {
                 </label>
               )}
             </div>
+          </div>
+
+          {/* What to show: the founder's own steps; the tour follows them and their funnel ranks first */}
+          <div className="space-y-2">
+            <label htmlFor="instructions" className="flex items-center space-x-2 text-xs font-mono uppercase text-zinc-400 tracking-wider">
+              <ListChecks className="w-3.5 h-3.5 text-teal-400" />
+              <span>What to show</span>
+              <span className="normal-case tracking-normal text-zinc-600">(optional)</span>
+            </label>
+            <textarea
+              id="instructions"
+              rows={3}
+              maxLength={1000}
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              disabled={busy}
+              placeholder={"Open Rules and enable “Require a linked ticket”, then open Events and show the pull request it blocked."}
+              className="w-full px-4 py-3 bg-zinc-950/80 border border-zinc-800 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition resize-y"
+            />
+            <p className="text-[11px] font-mono text-zinc-500">
+              The tour follows these steps in order. Leave it empty and the agent tours the product&apos;s strongest funnel.
+            </p>
           </div>
 
           <Personalize

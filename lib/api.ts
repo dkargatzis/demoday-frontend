@@ -85,6 +85,7 @@ export function startPipelineJob(data: {
   ai_clips?: boolean;
   use_staged_data?: boolean;
   audience?: AudienceInput | null;
+  instructions?: string; // what the demo must show, in the founder's words; the tour follows it
 }): Promise<JobStatus> {
   return request<JobStatus>("/api/pipeline/start", json(data));
 }
