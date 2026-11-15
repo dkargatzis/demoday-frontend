@@ -29,7 +29,7 @@ import type { AppLogin, FixtureSet, HealthStatus } from "@/lib/types";
 import { useJobStream } from "@/lib/useJobStream";
 import { useLeaveGuard } from "@/lib/useLeaveGuard";
 import { AuthGate, type Session } from "@/components/AuthGate";
-import { PipelineStepper } from "@/components/PipelineStepper";
+import { AgentTrace, LedgerStrip } from "@/components/AgentTrace";
 import { LogTerminal } from "@/components/LogTerminal";
 import { PipelineError } from "@/components/PipelineError";
 import { VideoTheater } from "@/components/VideoTheater";
@@ -74,13 +74,20 @@ function Dashboard({ session }: { session: Session }) {
 
   // Live job state over SSE (/api/pipeline/events/{id}) with reconnects and a polling fallback.
   const [jobId, setJobId] = useState<string | null>(null);
-  const { job, setJob, streamState } = useJobStream(jobId);
+  const { job, setJob, streamState, stepExtras, stepMarks } = useJobStream(jobId);
   const [starting, setStarting] = useState(false);
   const [activeTab, setActiveTab] = useState<"video" | "readme" | "devpost" | "social">("video");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [initError, setInitError] = useState<string | null>(null);
 
   const formRef = useRef<HTMLFormElement>(null);
+
+  // /?job=<id> reopens a job (the presenter's plan-B tab): the stream replays every event, thumbnails included,
+  // while the job is in memory; after a restart the hook gets the final snapshot with its steps and tool calls.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("job");
+    if (id && /^[a-f0-9]{8,32}$/.test(id)) setJobId(id);
+  }, []);
 
   // Check health: every 3s while the backend is down (it may still be booting), every 15s once it's up
   useEffect(() => {
@@ -151,6 +158,7 @@ function Dashboard({ session }: { session: Session }) {
       });
       setJob(initialJob);
       setJobId(initialJob.job_id); // useJobStream subscribes to this job's event stream
+      window.history.replaceState(null, "", `?job=${initialJob.job_id}`); // a reload or a plan-B tab reopens it
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 401) return session.logout(); // session expired
       setInitError(err.message || "Failed to start autonomous pipeline. Ensure FastAPI backend is running on :8000.");
@@ -462,13 +470,11 @@ function Dashboard({ session }: { session: Session }) {
               </div>
             )}
 
-            {/* Pipeline Stepper */}
-            <PipelineStepper
-              currentStage={job.stage}
-              progress={job.progress}
-              status={job.status}
-              elapsedSeconds={elapsedSeconds}
-            />
+            {/* Agent Trace (replaces the stepper; renders the old grid itself when the job has no steps) */}
+            <AgentTrace job={job} extras={stepExtras} marks={stepMarks} elapsedSeconds={elapsedSeconds} />
+
+            {/* Tool ledger: every Gemini and fal.ai call, live */}
+            <LedgerStrip calls={job.tool_calls} status={job.status} />
 
             {/* Error State Card (if failed) */}
             {job.status === "failed" && (

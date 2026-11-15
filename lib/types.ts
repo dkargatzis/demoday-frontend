@@ -12,6 +12,9 @@ export interface Scene {
   narration: string;
   actions: Action[];
   duration_sec?: number;
+  why?: string | null; // the planner's one line on why this scene is in the tour
+  verdict?: string | null; // the footage review's verdict for this scene
+  seen?: string | null; // what the reviewer saw on screen
 }
 
 export interface Storyboard {
@@ -23,6 +26,81 @@ export interface Storyboard {
   outro_sec?: number;
   intro_visual?: string | null;
   outro_visual?: string | null;
+  plan_rationale?: string | null; // why these pages in this order (one sentence)
+  music_prompt?: string | null; // Gemini's brief for the fal.ai soundtrack
+  cover_visual?: string | null; // Gemini's brief for the fal.ai cover art
+  soundtrack?: string | null; // how the soundtrack was made, or why it was skipped
+  cover?: string | null; // how the cover art was made, or why it was skipped
+}
+
+export type StepStatus = "running" | "done" | "skipped" | "error";
+
+/** One row of the agent trace (`JobStatus.steps`): a pipeline step and the tool behind it. */
+export interface StepState {
+  id: string;
+  status: StepStatus;
+  label: string;
+  tool?: string | null; // gemini, fal, chromium, ffmpeg or github
+  detail?: string | null;
+  message?: string | null;
+  started_at?: number | null; // unix seconds
+  ended_at?: number | null;
+}
+
+/** One Gemini or fal.ai call the job made (`JobStatus.tool_calls`, the ledger). */
+export interface ToolCall {
+  tool: "gemini" | "fal" | string;
+  purpose: string;
+  model: string;
+  started_at: number; // unix seconds
+  ended_at?: number | null;
+  ms?: number | null;
+  ok?: boolean | null; // null while the call is in flight
+  note?: string;
+}
+
+/** A page Gemini looked at (the `understand` step's one-off extra). Both server spellings are accepted. */
+export interface StepPage {
+  path?: string;
+  title?: string;
+  purpose?: string;
+  best_moment?: string;
+  demo_moment?: string;
+  quality?: string; // ok, empty, error, login, ...
+  thumb?: string; // base64 JPEG
+  thumbnail_b64?: string;
+}
+
+/** The footage review's verdict for one scene (the `review` step's one-off extra). */
+export interface StepVerdict {
+  scene?: string | number;
+  title?: string;
+  verdict?: string;
+  confidence?: number | string;
+  seen?: string;
+  issue?: string;
+}
+
+/** The one-off payload of a `step` SSE event (thumbnails, verdicts); never part of a JobStatus snapshot. */
+export interface StepExtra {
+  pages?: StepPage[];
+  verdicts?: StepVerdict[];
+  scenes?: StepVerdict[];
+  thumb?: string; // base64 JPEG (cover art)
+  thumbnail_b64?: string;
+  [key: string]: unknown;
+}
+
+/** A `step` SSE event: the row, `t` (seconds since the job started) and the optional one-off extra. */
+export interface StepEvent {
+  id: string;
+  status: StepStatus;
+  label: string;
+  tool?: string | null;
+  t?: number;
+  detail?: string;
+  message?: string;
+  extra?: StepExtra;
 }
 
 export interface LaunchKit {
@@ -46,6 +124,8 @@ export interface JobStatus {
   app_url?: string;
   created_at?: number;
   options?: { goals?: string[]; requestedLanguage?: string; language?: string };
+  steps?: StepState[]; // the agent trace, one row per pipeline step (absent on older servers)
+  tool_calls?: ToolCall[]; // every Gemini and fal.ai call, with latency
 }
 
 export interface HealthStatus {

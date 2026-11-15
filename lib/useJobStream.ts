@@ -2,9 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { fetchJobStatus, jobEventsUrl } from "./api";
-import type { JobStatus } from "./types";
+import type { JobStatus, StepEvent, StepExtra } from "./types";
 
 export type StreamState = "idle" | "live" | "reconnecting" | "polling" | "done" | "lost";
+
+/** When a step's `step` events arrived, in seconds since the job started (the events' `t`). */
+export interface StepMark {
+  started?: number;
+  ended?: number;
+}
 
 const POLL_MS = 2000;
 const MAX_POLL_FAILURES = 15; // ~30 s of an unreachable backend
@@ -19,12 +25,20 @@ const isTerminal = (job: JobStatus) => job.status === "completed" || job.status 
  * browser retries dropped connections by itself (replaying from `Last-Event-ID`), and if the stream
  * can't be (re)opened at all (for example a 404 after a backend restart) the hook falls back to
  * polling the status endpoint.
+ *
+ * The trace rows (`job.steps`) and the ledger (`job.tool_calls`) ride on the snapshots; only the heavy one-off
+ * payloads of `step` events (page thumbnails, review verdicts, cover art) are collected separately, per step id.
+ * A reconnect replays them from `Last-Event-ID`, and a fresh tab on /?job=<id> gets the whole log again.
  */
 export function useJobStream(jobId: string | null) {
   const [job, setJob] = useState<JobStatus | null>(null);
   const [streamState, setStreamState] = useState<StreamState>("idle");
+  const [stepExtras, setStepExtras] = useState<Record<string, StepExtra>>({});
+  const [stepMarks, setStepMarks] = useState<Record<string, StepMark>>({});
 
   useEffect(() => {
+    setStepExtras({});
+    setStepMarks({});
     if (!jobId) {
       setStreamState("idle");
       return;
@@ -73,6 +87,28 @@ export function useJobStream(jobId: string | null) {
     source.addEventListener("status", onSnapshot);
     source.addEventListener("done", onSnapshot);
     source.onmessage = onSnapshot; // older backends: unnamed snapshots
+    const onStep = (event: Event) => {
+      if (disposed) return;
+      try {
+        const step = JSON.parse((event as MessageEvent<string>).data) as StepEvent;
+        if (!step || typeof step.id !== "string") return;
+        if (step.extra && typeof step.extra === "object") {
+          const extra = step.extra;
+          setStepExtras((prev) => ({ ...prev, [step.id]: { ...prev[step.id], ...extra } }));
+        }
+        if (typeof step.t === "number") {
+          setStepMarks((prev) => {
+            const mark: StepMark = { ...prev[step.id] };
+            if (step.status === "running") mark.started = step.t;
+            else mark.ended = step.t;
+            return { ...prev, [step.id]: mark };
+          });
+        }
+      } catch (err) {
+        console.error("Ignoring malformed step event", err);
+      }
+    };
+    source.addEventListener("step", onStep);
     source.onerror = (event: Event) => {
       if (disposed) return;
       if ("data" in event) {
@@ -97,5 +133,5 @@ export function useJobStream(jobId: string | null) {
     };
   }, [jobId]);
 
-  return { job, setJob, streamState };
+  return { job, setJob, streamState, stepExtras, stepMarks };
 }

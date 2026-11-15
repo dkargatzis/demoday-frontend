@@ -21,7 +21,7 @@ export function useRequireUser() {
       .then((me) => {
         if (cancelled) return;
         if (me) setUser(me);
-        else router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+        else router.replace(`/login?next=${encodeURIComponent(pathname + window.location.search)}`); // keeps ?job= replay links
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof ApiError ? err.message : "Couldn't check your session");

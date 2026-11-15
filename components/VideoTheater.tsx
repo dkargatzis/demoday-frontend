@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Storyboard, Scene } from "@/lib/types";
 import { getDownloadUrl, getFullVideoUrl, getShareLink } from "@/lib/api";
+import { assetMade, VERDICT_CLASS, verdictKind } from "@/lib/trace";
 
 interface VideoTheaterProps {
   videoUrl?: string;
@@ -151,6 +152,8 @@ export function VideoTheater({
             </div>
             <p className="text-xs text-zinc-400 mt-0.5">
               1080p browser footage synchronized with fal.ai voice narration and documentation.
+              {assetMade(storyboard?.soundtrack) ? " · fal.ai soundtrack" : ""}
+              {assetMade(storyboard?.cover) ? " · fal.ai FLUX cover art" : ""}
             </p>
           </div>
         </div>
@@ -169,12 +172,12 @@ export function VideoTheater({
             <span className="text-teal-300 font-bold">1080p 30fps</span>
           </div>
 
-          {elapsedSeconds && (
+          {elapsedSeconds ? (
             <div className="px-3 py-1.5 rounded-lg bg-zinc-950/80 border border-zinc-800 text-zinc-300">
               <span className="text-zinc-500 mr-1.5">Elapsed:</span>
               <span className="text-zinc-200">{elapsedSeconds}s</span>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -301,6 +304,12 @@ export function VideoTheater({
             </span>
           </div>
 
+          {storyboard?.plan_rationale && (
+            <p className="text-[11px] text-zinc-400 leading-relaxed mb-3">
+              <span className="text-zinc-500 font-mono">Why this tour:</span> {storyboard.plan_rationale}
+            </p>
+          )}
+
           {/* Scene List */}
           <div className="space-y-3 overflow-y-auto max-h-[500px] pr-1">
             {sceneOffsets.map((scene, idx) => {
@@ -320,7 +329,7 @@ export function VideoTheater({
                     <div className="absolute top-0 left-0 right-0 h-[2px] bg-emerald-400 animate-pulse" />
                   )}
 
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-1.5">
                     <div className="flex items-center space-x-2">
                       <span
                         className={`font-semibold font-mono text-[11px] ${
@@ -333,14 +342,27 @@ export function VideoTheater({
                         <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
                       )}
                     </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
-                      {formatSeconds(scene.start)} - {formatSeconds(scene.end)}
+                    <span className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+                      {scene.verdict && (
+                        <span
+                          title={scene.seen ? `Reviewer saw: ${scene.seen}` : "Footage review verdict"}
+                          className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${VERDICT_CLASS[verdictKind(scene.verdict)]}`}
+                        >
+                          {scene.verdict}
+                        </span>
+                      )}
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
+                        {formatSeconds(scene.start)} - {formatSeconds(scene.end)}
+                      </span>
                     </span>
                   </div>
 
                   <p className="text-zinc-300 italic font-sans leading-relaxed text-[11px] mb-2">
                     "{scene.narration}"
                   </p>
+                  {scene.why && (
+                    <p className="text-zinc-500 italic text-[11px] leading-relaxed -mt-1 mb-2">{scene.why}</p>
+                  )}
 
                   <div className="flex flex-wrap items-center gap-1.5 pt-1">
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">
