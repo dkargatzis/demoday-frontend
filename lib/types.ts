@@ -42,6 +42,10 @@ export interface JobStatus {
   launch_kit?: LaunchKit;
   video_url?: string;
   error?: string;
+  jobId?: string; // on the start response (Launch Kit v2 naming)
+  app_url?: string;
+  created_at?: number;
+  options?: { goals?: string[]; requestedLanguage?: string; language?: string };
 }
 
 export interface HealthStatus {

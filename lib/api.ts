@@ -185,6 +185,7 @@ export function originOf(url: string): string | null {
 async function describeError(res: Response): Promise<string> {
   try {
     const body = await res.json();
+    if (typeof body?.message === "string") return body.message; // 422: one plain sentence
     if (typeof body?.detail === "string") return body.detail;
     if (Array.isArray(body?.detail)) {
       return body.detail

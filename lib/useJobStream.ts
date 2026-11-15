@@ -14,9 +14,11 @@ const isTerminal = (job: JobStatus) => job.status === "completed" || job.status 
 /**
  * Follows a pipeline job over Server-Sent Events (`/api/pipeline/events/{id}`).
  *
- * Every event carries a full JobStatus snapshot, so reconnecting is harmless: the browser retries
- * dropped connections by itself, and if the stream can't be (re)opened at all (for example a 404
- * after a backend restart) the hook falls back to polling the status endpoint.
+ * The stream is typed (`job`, `step`, `log`, `status`, then `done` or `error`); this hook renders the
+ * `status` snapshots (a full JobStatus each) and the final `done`, so reconnecting is harmless: the
+ * browser retries dropped connections by itself (replaying from `Last-Event-ID`), and if the stream
+ * can't be (re)opened at all (for example a 404 after a backend restart) the hook falls back to
+ * polling the status endpoint.
  */
 export function useJobStream(jobId: string | null) {
   const [job, setJob] = useState<JobStatus | null>(null);
@@ -61,15 +63,25 @@ export function useJobStream(jobId: string | null) {
     source.onopen = () => {
       if (!disposed) setStreamState("live");
     };
-    source.onmessage = (event: MessageEvent<string>) => {
+    const onSnapshot = (event: Event) => {
       try {
-        apply(JSON.parse(event.data) as JobStatus);
+        apply(JSON.parse((event as MessageEvent<string>).data) as JobStatus);
       } catch (err) {
         console.error("Ignoring malformed SSE payload", err);
       }
     };
-    source.onerror = () => {
+    source.addEventListener("status", onSnapshot);
+    source.addEventListener("done", onSnapshot);
+    source.onmessage = onSnapshot; // older backends: unnamed snapshots
+    source.onerror = (event: Event) => {
       if (disposed) return;
+      if ("data" in event) {
+        // The server's own `error` event: the job failed (or is unknown). Fetch the final snapshot once.
+        source.close();
+        setStreamState("polling");
+        void poll(0);
+        return;
+      }
       if (source.readyState === EventSource.CLOSED) {
         setStreamState("polling"); // fatal: the browser won't retry on its own
         void poll(0);
