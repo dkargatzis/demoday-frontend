@@ -76,6 +76,8 @@ export interface GitHubConnection extends SavedSecret {
 export interface AppLogin extends SavedSecret {
   origin: string;
   cookie_count: number;
+  session_storage_keys?: number;
+  indexed_db_records?: number;
   last_url?: string;
 }
 

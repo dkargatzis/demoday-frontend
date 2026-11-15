@@ -189,6 +189,8 @@ function SettingsView({ session }: { session: Session }) {
                   </p>
                   <p className="text-zinc-500 font-mono mt-0.5">
                     saved {formatDate(login.created_at)} · {login.cookie_count} cookies
+                    {login.indexed_db_records ? ` · ${login.indexed_db_records} IndexedDB` : ""}
+                    {login.session_storage_keys ? ` · ${login.session_storage_keys} session keys` : ""}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
