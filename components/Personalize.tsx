@@ -51,6 +51,9 @@ interface PersonalizeProps {
   geminiAvailable: boolean;
   /** The Company input, so the page can focus it ("Make another for the next customer"). */
   focusRef?: React.RefObject<HTMLInputElement | null>;
+  /** The panel's heading and one-line blurb (the analysis page says what the fields are for there). */
+  heading?: string;
+  blurb?: string;
 }
 
 /**
@@ -59,7 +62,8 @@ interface PersonalizeProps {
  * required only while it is open. The URL-ish inputs are type="text" with inputMode="url": the e2e tests address
  * the repo and app fields as input[type=url] by index.
  */
-export function Personalize({ value, onChange, open, onOpenChange, disabled, geminiAvailable, focusRef }: PersonalizeProps) {
+export function Personalize({ value, onChange, open, onOpenChange, disabled, geminiAvailable, focusRef,
+                             heading = "Personalize for a customer", blurb = TEASER }: PersonalizeProps) {
   const id = useId();
   const ownRef = useRef<HTMLInputElement | null>(null);
   const companyRef = focusRef ?? ownRef;
@@ -90,8 +94,8 @@ export function Personalize({ value, onChange, open, onOpenChange, disabled, gem
             <User className="w-4 h-4" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-bold text-white">Personalize for a customer</span>
-            <span className="block text-[11px] text-zinc-500 leading-relaxed">{TEASER}</span>
+            <span className="block text-sm font-bold text-white">{heading}</span>
+            <span className="block text-[11px] text-zinc-500 leading-relaxed">{blurb}</span>
           </span>
           {open ? (
             <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />

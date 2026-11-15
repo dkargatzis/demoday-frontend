@@ -106,15 +106,26 @@ const ORDER: RowSpec[] = [
   { id: "launchpack", label: "Launch kit", tool: "gemini", core: true },
 ];
 
+// A prospect analysis (step 1 of 2) has its own steps and never records.
+const ANALYSIS_ORDER: RowSpec[] = [
+  { id: "repos", label: "Read repos", tool: "github" },
+  { id: "code", label: "Read the code", tool: "github", core: true },
+  { id: "scrape", label: "Explore app", tool: "chromium", core: true },
+  { id: "audience", label: "Research prospect", tool: "gemini" },
+  { id: "understand", label: "Understand", tool: "gemini" },
+  { id: "analysis", label: "Analyze for the prospect", tool: "gemini", core: true },
+];
+
 interface Row {
   spec: RowSpec;
   state?: StepState;
 }
 
-function buildRows(steps: StepState[]): Row[] {
+function buildRows(steps: StepState[], kind?: string): Row[] {
   const byId = new Map(steps.map((s) => [s.id, s]));
   const rows: Row[] = [];
-  for (const spec of ORDER) {
+  const order = kind === "analysis" ? ANALYSIS_ORDER : ORDER;
+  for (const spec of order) {
     const state = byId.get(spec.id);
     if (!state && !spec.core) continue;
     if (spec.id === "ai_clips" && state?.status === "skipped") continue;
@@ -122,7 +133,7 @@ function buildRows(steps: StepState[]): Row[] {
   }
   for (const state of steps) {
     // Unknown ids (a newer server) render generically at the end.
-    if (!ORDER.some((o) => o.id === state.id)) {
+    if (!order.some((o) => o.id === state.id)) {
       rows.push({ spec: { id: state.id, label: state.label || state.id, tool: state.tool ?? "" }, state });
     }
   }
@@ -431,7 +442,7 @@ export function AgentTrace({ job, extras = {}, marks = {}, elapsedSeconds }: Age
     const timer = setInterval(() => setNow(Date.now() / 1000), 1000);
     return () => clearInterval(timer);
   }, [terminal]);
-  const rows = useMemo(() => buildRows(steps ?? []), [steps]);
+  const rows = useMemo(() => buildRows(steps ?? [], job.kind), [steps, job.kind]);
 
   if (legacy) {
     return (

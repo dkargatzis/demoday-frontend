@@ -7,6 +7,7 @@ import {
   Github,
   Globe,
   ListChecks,
+  Microscope,
   Mic,
   Clock,
   Film,
@@ -271,6 +272,14 @@ function Dashboard({ session }: { session: Session }) {
               </div>
             )}
             <span className="hidden lg:inline text-[11px] font-mono text-zinc-500">{session.user.email}</span>
+            <Link
+              href="/analyze"
+              title="Step 1 of 2: analyze your product's code and app for one prospect, then film the funnel you pick"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full glass-panel text-xs font-mono text-emerald-300 hover:text-white transition"
+            >
+              <Microscope className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Analyze a prospect</span>
+            </Link>
             <Link
               href="/settings"
               title="Settings: GitHub access and app logins"

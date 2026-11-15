@@ -90,6 +90,11 @@ export function startPipelineJob(data: {
   return request<JobStatus>("/api/pipeline/start", json(data));
 }
 
+/** Step 1 of 2: analyze the product (code + live app) for one prospect; the job's `analysis` holds the result. */
+export function startAnalysisJob(data: Parameters<typeof startPipelineJob>[0]): Promise<JobStatus> {
+  return request<JobStatus>("/api/pipeline/analyze", json(data));
+}
+
 /** Current job snapshot, or null when the backend no longer knows the job. */
 export async function fetchJobStatus(jobId: string): Promise<JobStatus | null> {
   try {

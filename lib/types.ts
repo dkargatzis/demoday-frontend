@@ -137,6 +137,44 @@ export interface JobStatus {
   options?: { goals?: string[]; requestedLanguage?: string; language?: string };
   steps?: StepState[]; // the agent trace, one row per pipeline step (absent on older servers)
   tool_calls?: ToolCall[]; // every Gemini and fal.ai call, with latency
+  kind?: "video" | "analysis"; // a prospect analysis is step 1 of 2: no video
+  analysis?: ProspectAnalysis | null;
+}
+
+/** One funnel of a prospect analysis: `steps` are pages the probe reached; `demo_steps` become the video's instructions. */
+export interface AnalysisFunnel {
+  name: string;
+  outcome?: string;
+  why_them?: string;
+  steps: string[];
+  evidence?: string;
+  demo_steps?: string;
+  strength?: number;
+}
+
+export interface AnalysisGap {
+  title: string;
+  kind: "missing_feature" | "missing_page" | "api_without_page" | "weak_page";
+  why_them?: string;
+  evidence?: string;
+  suggestion?: string;
+}
+
+export interface AnalysisFeature {
+  name: string;
+  what?: string;
+  where?: string;
+}
+
+export interface ProspectAnalysis {
+  project?: string;
+  prospect?: string | null;
+  summary?: string;
+  features?: AnalysisFeature[];
+  funnels?: AnalysisFunnel[];
+  gaps?: AnalysisGap[];
+  files_read?: { repo: string; path: string; role: string }[];
+  pages?: string[];
 }
 
 export interface HealthStatus {
