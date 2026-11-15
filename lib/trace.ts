@@ -1,4 +1,4 @@
-import type { JobStatus, Scene, StepExtra, StepPage, StepState, StepVerdict } from "./types";
+import type { JobStatus, Scene, StepExtra, StepFunnel, StepPage, StepState, StepVerdict } from "./types";
 
 /** mm:ss for the job timer. */
 export function formatClock(seconds: number): string {
@@ -48,6 +48,12 @@ export function verdictKind(verdict?: string | null): VerdictKind {
 export function pagesOf(extra?: StepExtra): StepPage[] {
   const pages = extra?.pages;
   return Array.isArray(pages) ? pages.filter((p): p is StepPage => !!p && typeof p === "object") : [];
+}
+
+/** The `funnels` extra's ranked funnels (ignores malformed entries). */
+export function funnelsOf(extra?: StepExtra): StepFunnel[] {
+  const funnels = extra?.funnels;
+  return Array.isArray(funnels) ? funnels.filter((f): f is StepFunnel => !!f && typeof f === "object" && typeof f.name === "string") : [];
 }
 
 export const pageThumb = (page: StepPage): string | undefined => page.thumb || page.thumbnail_b64 || undefined;

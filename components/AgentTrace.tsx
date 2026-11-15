@@ -27,6 +27,7 @@ import {
   coverThumb,
   formatClock,
   formatDuration,
+  funnelsOf,
   jobSeconds,
   pageFlagged,
   pageMoment,
@@ -91,6 +92,7 @@ const ORDER: RowSpec[] = [
   { id: "scrape", label: "Explore app", tool: "chromium", core: true },
   { id: "audience", label: "Research customer", tool: "gemini" },
   { id: "understand", label: "Understand", tool: "gemini" },
+  { id: "funnels", label: "Find funnels", tool: "gemini" },
   { id: "storyboard", label: "Plan", tool: "gemini", core: true },
   { id: "plancheck", label: "Check plan", tool: "gemini" },
   { id: "ai_clips", label: "AI clips", tool: "fal" },
@@ -335,6 +337,21 @@ function subRow(id: string, state: StepState | undefined, extra: StepExtra | und
     case "understand": {
       const pages = pagesOf(extra);
       return pages.length ? <PagesStrip pages={pages} /> : null;
+    }
+    case "funnels": {
+      const funnels = funnelsOf(extra);
+      return funnels.length ? (
+        <ol className="space-y-1 text-[11px] text-zinc-400">
+          {funnels.map((funnel, i) => (
+            <li key={`${funnel.name}-${i}`} title={funnel.evidence ?? undefined}>
+              <span className="font-mono text-zinc-500">{i + 1}.</span>{" "}
+              <span className={i === 0 ? "text-emerald-300" : "text-zinc-300"}>{funnel.name}</span>
+              {funnel.steps?.length ? <span className="font-mono text-zinc-500"> · {funnel.steps.join(" → ")}</span> : null}
+              {funnel.outcome ? <span className="block pl-4 text-zinc-500">{funnel.outcome}</span> : null}
+            </li>
+          ))}
+        </ol>
+      ) : null;
     }
     case "storyboard":
       return storyboard?.plan_rationale ? (

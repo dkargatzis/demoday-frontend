@@ -82,8 +82,18 @@ export interface StepVerdict {
 }
 
 /** The one-off payload of a `step` SSE event (thumbnails, verdicts); never part of a JobStatus snapshot. */
+/** One ranked funnel from the `funnels` step: steps are pages the probe reached, in the order a user takes them. */
+export interface StepFunnel {
+  name: string;
+  outcome?: string;
+  steps?: string[];
+  evidence?: string;
+  strength?: number;
+}
+
 export interface StepExtra {
   pages?: StepPage[];
+  funnels?: StepFunnel[];
   verdicts?: StepVerdict[];
   scenes?: StepVerdict[];
   thumb?: string; // base64 JPEG (cover art)
