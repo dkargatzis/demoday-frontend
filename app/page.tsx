@@ -21,7 +21,6 @@ import {
   Settings as SettingsIcon,
   ShieldCheck,
   Trash2,
-  Clapperboard,
   Database,
 } from "lucide-react";
 import Link from "next/link";
@@ -65,10 +64,6 @@ function Dashboard({ session }: { session: Session }) {
   // Saved app logins (Settings) let the recorder show pages behind the app's sign-in.
   const [appLogins, setAppLogins] = useState<AppLogin[]>([]);
   const [useAppLogin, setUseAppLogin] = useState(true);
-  // AI intro/outro clips (fal.ai text-to-video): on by default when the backend has a fal key, since they are
-  // what makes the video more than a screen recording; the user can switch them off per run.
-  const [aiClips, setAiClips] = useState(false);
-  const [aiClipsTouched, setAiClipsTouched] = useState(false);
   // Staged sample data sets (Settings) replace the app's API responses while recording.
   const [fixtureSets, setFixtureSets] = useState<FixtureSet[]>([]);
   const [useStagedData, setUseStagedData] = useState(true);
@@ -112,10 +107,6 @@ function Dashboard({ session }: { session: Session }) {
       .then(setFixtureSets)
       .catch(() => setFixtureSets([]));
   }, []);
-  useEffect(() => {
-    if (health?.fal && !aiClipsTouched) setAiClips(true);
-  }, [health?.fal, aiClipsTouched]);
-
   const appOrigin = originOf(appUrl);
   const savedLogin = appLogins.find((login) => login.origin === appOrigin);
   const stagedSet = fixtureSets.find((set) => set.origin === appOrigin && set.enabled_count > 0);
@@ -156,7 +147,6 @@ function Dashboard({ session }: { session: Session }) {
         voice_style: voiceStyle,
         target_seconds: targetSeconds,
         use_app_login: useAppLogin,
-        ai_clips: aiClips,
         use_staged_data: useStagedData,
       });
       setJob(initialJob);
@@ -445,27 +435,6 @@ function Dashboard({ session }: { session: Session }) {
                 </div>
               </div>
 
-              <label
-                className="flex items-center space-x-2 cursor-pointer select-none"
-                title={
-                  health?.fal
-                    ? "Adds a short AI-generated opening and closing shot with your project's name and URL. Uses fal.ai video credits (about $0.25 per clip)."
-                    : "FAL_KEY isn't set on the backend, so the intro and outro will be typeset title cards without AI footage."
-                }
-              >
-                <input
-                  type="checkbox"
-                  checked={aiClips}
-                  onChange={(e) => {
-                    setAiClipsTouched(true);
-                    setAiClips(e.target.checked);
-                  }}
-                  className="accent-emerald-500"
-                />
-                <Clapperboard className="w-4 h-4 text-zinc-400" />
-                <span className="text-zinc-400">AI intro & outro</span>
-                <span className="text-[10px] text-zinc-500">{health?.fal ? "fal.ai · ~$0.50" : "titles only"}</span>
-              </label>
             </div>
 
             <button
