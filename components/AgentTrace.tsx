@@ -110,6 +110,7 @@ const ORDER: RowSpec[] = [
 const ANALYSIS_ORDER: RowSpec[] = [
   { id: "repos", label: "Read repos", tool: "github" },
   { id: "code", label: "Read the code", tool: "github", core: true },
+  { id: "capabilities", label: "Map backend vs app", tool: "github" },
   { id: "scrape", label: "Explore app", tool: "chromium", core: true },
   { id: "audience", label: "Research prospect", tool: "gemini" },
   { id: "understand", label: "Understand", tool: "gemini" },

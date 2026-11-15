@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { AlertTriangle, ArrowRight, Boxes, FileCode2, Route, Sparkles } from "lucide-react";
-import type { AnalysisGap, ProspectAnalysis } from "@/lib/types";
+import { AlertTriangle, ArrowRight, Boxes, FileCode2, Network, Route, Sparkles } from "lucide-react";
+import type { AnalysisGap, CapabilityMap, ProspectAnalysis } from "@/lib/types";
 
 const GAP_LABEL: Record<AnalysisGap["kind"], string> = {
   missing_feature: "Missing feature",
@@ -10,6 +10,65 @@ const GAP_LABEL: Record<AnalysisGap["kind"], string> = {
   api_without_page: "API without a page",
   weak_page: "Weak page",
 };
+
+/** What the backend can do against what the app uses: coverage per area and the endpoints no frontend file calls. */
+function CapabilitySection({ map, project }: { map: CapabilityMap; project?: string }) {
+  const uncalled = map.uncalled_total ?? map.uncalled.length;
+  const byArea = new Map<string, CapabilityMap["uncalled"]>();
+  for (const endpoint of map.uncalled) byArea.set(endpoint.area, [...(byArea.get(endpoint.area) ?? []), endpoint]);
+  return (
+    <section className="glass-panel rounded-2xl p-5 space-y-4">
+      <div className="space-y-1">
+        <h3 className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-zinc-400">
+          <Network className="w-3.5 h-3.5 text-teal-400" /> What {project || "the backend"} can do that the app doesn&apos;t show
+        </h3>
+        <p className="text-xs text-zinc-500">
+          Measured from the code: {map.endpoints} endpoints, {map.called} called by the frontend, {uncalled} not
+          {map.retired ? ` (plus ${map.retired} in deprecated routers, not counted)` : ""}.
+        </p>
+      </div>
+      {!map.frontend_seen ? (
+        <p className="text-sm text-amber-200">No frontend code was read, so coverage can&apos;t be measured: add the frontend repository.</p>
+      ) : (
+        <>
+          <ul className="grid gap-x-6 gap-y-1.5 md:grid-cols-2">
+            {map.areas.slice(0, 14).map((area) => {
+              const share = area.endpoints ? area.called / area.endpoints : 0;
+              return (
+                <li key={area.area} className="text-[11px] font-mono">
+                  <div className="flex justify-between text-zinc-400">
+                    <span className="truncate text-zinc-300">{area.area}</span>
+                    <span>{area.called}/{area.endpoints} in the app</span>
+                  </div>
+                  <div className="h-1.5 rounded bg-zinc-800 overflow-hidden">
+                    <div className={`h-full ${share < 0.5 ? "bg-amber-400/80" : "bg-emerald-400/80"}`} style={{ width: `${Math.round(share * 100)}%` }} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {map.uncalled.length > 0 && (
+            <details>
+              <summary className="text-xs font-mono text-zinc-400 cursor-pointer">Endpoints no frontend file calls ({uncalled})</summary>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {[...byArea.entries()].map(([area, endpoints]) => (
+                  <div key={area} className="space-y-1">
+                    <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-500">{area}</p>
+                    {endpoints.map((endpoint) => (
+                      <p key={`${endpoint.method} ${endpoint.path}`} className="text-[11px] font-mono text-zinc-300 truncate" title={endpoint.file}>
+                        <span className="text-teal-300">{endpoint.method}</span> {endpoint.path}
+                      </p>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
 
 interface AnalysisReportProps {
   analysis: ProspectAnalysis;
@@ -97,6 +156,8 @@ export function AnalysisReport({ analysis, picked, onPick }: AnalysisReportProps
           </ul>
         </section>
       )}
+
+      {analysis.capabilities && <CapabilitySection map={analysis.capabilities} project={analysis.project} />}
 
       {features.length > 0 && (
         <details className="glass-panel rounded-2xl p-4">

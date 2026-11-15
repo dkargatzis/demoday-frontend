@@ -175,6 +175,19 @@ export interface ProspectAnalysis {
   gaps?: AnalysisGap[];
   files_read?: { repo: string; path: string; role: string }[];
   pages?: string[];
+  capabilities?: CapabilityMap;
+}
+
+/** Backend endpoints against the frontend's API calls, measured from the code (no model). */
+export interface CapabilityMap {
+  endpoints: number;
+  called: number;
+  uncalled_total?: number;
+  retired?: number; // endpoints in deprecated or legacy routers, never reported as gaps
+  frontend_seen?: boolean;
+  files_scanned?: number;
+  areas: { area: string; endpoints: number; called: number }[];
+  uncalled: { method: string; path: string; file: string; area: string }[];
 }
 
 export interface HealthStatus {
