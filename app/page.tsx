@@ -65,8 +65,10 @@ function Dashboard({ session }: { session: Session }) {
   // Saved app logins (Settings) let the recorder show pages behind the app's sign-in.
   const [appLogins, setAppLogins] = useState<AppLogin[]>([]);
   const [useAppLogin, setUseAppLogin] = useState(true);
-  // Optional AI intro/outro clips (fal.ai text-to-video), off by default because they use credits.
+  // AI intro/outro clips (fal.ai text-to-video): on by default when the backend has a fal key, since they are
+  // what makes the video more than a screen recording; the user can switch them off per run.
   const [aiClips, setAiClips] = useState(false);
+  const [aiClipsTouched, setAiClipsTouched] = useState(false);
   // Staged sample data sets (Settings) replace the app's API responses while recording.
   const [fixtureSets, setFixtureSets] = useState<FixtureSet[]>([]);
   const [useStagedData, setUseStagedData] = useState(true);
@@ -110,6 +112,10 @@ function Dashboard({ session }: { session: Session }) {
       .then(setFixtureSets)
       .catch(() => setFixtureSets([]));
   }, []);
+  useEffect(() => {
+    if (health?.fal && !aiClipsTouched) setAiClips(true);
+  }, [health?.fal, aiClipsTouched]);
+
   const appOrigin = originOf(appUrl);
   const savedLogin = appLogins.find((login) => login.origin === appOrigin);
   const stagedSet = fixtureSets.find((set) => set.origin === appOrigin && set.enabled_count > 0);
@@ -450,7 +456,10 @@ function Dashboard({ session }: { session: Session }) {
                 <input
                   type="checkbox"
                   checked={aiClips}
-                  onChange={(e) => setAiClips(e.target.checked)}
+                  onChange={(e) => {
+                    setAiClipsTouched(true);
+                    setAiClips(e.target.checked);
+                  }}
                   className="accent-emerald-500"
                 />
                 <Clapperboard className="w-4 h-4 text-zinc-400" />
