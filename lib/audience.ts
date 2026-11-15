@@ -88,6 +88,7 @@ export interface JobSummary {
   persona?: string | null;
   customerGoal?: string | null;
   durationSec?: number | null;
+  coverUrl?: string | null; // the cover poster, once painted
 }
 
 // ---------------------------------------------------------------- accessors & small helpers

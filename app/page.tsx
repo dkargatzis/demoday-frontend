@@ -660,6 +660,7 @@ function Dashboard({ session }: { session: Session }) {
             {activeTab === "video" && (
               <VideoTheater
                 videoUrl={job.video_url}
+                coverUrl={job.cover_url}
                 storyboard={job.storyboard}
                 elapsedSeconds={elapsedSeconds}
               />

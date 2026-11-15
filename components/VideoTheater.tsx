@@ -22,12 +22,14 @@ import { assetMade, VERDICT_CLASS, verdictKind } from "@/lib/trace";
 
 interface VideoTheaterProps {
   videoUrl?: string;
+  coverUrl?: string | null; // the backend's cover poster (job.cover_url)
   storyboard?: Storyboard;
   elapsedSeconds?: number;
 }
 
 export function VideoTheater({
   videoUrl,
+  coverUrl,
   storyboard,
   elapsedSeconds,
 }: VideoTheaterProps) {
@@ -38,6 +40,7 @@ export function VideoTheater({
   const [copiedLink, setCopiedLink] = useState(false);
 
   const fullUrl = videoUrl ? getFullVideoUrl(videoUrl) : "";
+  const posterUrl = coverUrl ? getFullVideoUrl(coverUrl) : undefined; // same origin and cookie as the video
   // `download` is ignored cross-origin, so ask the backend for an attachment response instead.
   const downloadUrl = videoUrl ? getDownloadUrl(videoUrl) : "";
 
@@ -246,6 +249,7 @@ export function VideoTheater({
                     onPause={() => setIsPlaying(false)}
                     className="w-full h-full object-cover"
                     src={fullUrl}
+                    poster={posterUrl}
                   />
                   {/* Subtle active scene badge overlay */}
                   {activeSceneIndex >= 0 && sceneOffsets[activeSceneIndex] && (

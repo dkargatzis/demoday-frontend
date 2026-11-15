@@ -119,6 +119,7 @@ export interface JobStatus {
   storyboard?: Storyboard;
   launch_kit?: LaunchKit;
   video_url?: string;
+  cover_url?: string | null; // the cover poster (1280x720 JPEG), once painted; the player's poster
   error?: string;
   jobId?: string; // on the start response (Launch Kit v2 naming)
   app_url?: string;
